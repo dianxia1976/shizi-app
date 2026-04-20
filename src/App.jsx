@@ -349,11 +349,30 @@ export default function App(){
 
 // ─── Home ───────────────────────────────────────────────────────
 function HomePage({P}){
-  const{state,cnt,startAll,startReview,setPage}=P;
+  const{state,cnt,startAll,startReview,setPage,setState}=P;
   const dt=state.dt;const ad=dt.r.d>=dt.r.t&&dt.p.d>=dt.p.t&&dt.w.d>=dt.w.t;
   const rc=state.chars.filter(c=>c.st!=="known").length;
+  const[tapCount,setTapCount]=useState(0);
+  const tapTimerRef=useRef(null);
+
+  const onLogoTap = () => {
+    clearTimeout(tapTimerRef.current);
+    const next = tapCount + 1;
+    setTapCount(next);
+    if (next >= 7) {
+      setTapCount(0);
+      setState(s => ({...s, devMode: !s.devMode}));
+      alert(state.devMode ? "已关闭开发者模式" : "✨ 开发者模式已开启！");
+    } else {
+      tapTimerRef.current = setTimeout(() => setTapCount(0), 2000);
+    }
+  };
+
   return(<div style={S.pg}>
-    <div style={{textAlign:"center",padding:"16px 0 4px"}}><div style={S.logo}>识字乐园</div><div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>第一至五册 · {CHARS.length}个汉字</div></div>
+    <div style={{textAlign:"center",padding:"16px 0 4px"}}>
+      <div style={S.logo} onClick={onLogoTap}>识字乐园</div>
+      <div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>第一至五册 · {CHARS.length}个汉字 {state.devMode && "· 🛠️"}</div>
+    </div>
     <div style={S.sr}>
       <SB l="已认识" v={cnt("known")} c="#4ade80" e="✅"/>
       <SB l="待复习" v={cnt("review")} c="#fbbf24" e="📖"/>
@@ -450,16 +469,18 @@ function LessonsPage({P}) {
         </div>
         <span style={{fontSize:16,color:"#818cf8"}}>{"›"}</span>
       </button>
-      <button onClick={() => { P.setCtx({selBook: b}); P.setPage("edit"); }} style={{...S.lc,background:"linear-gradient(135deg,rgba(251,146,60,0.12),rgba(249,115,22,0.12))",border:"2px solid #fb923c"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <span style={{fontSize:22}}>{"✏️"}</span>
-          <div>
-            <div style={{fontWeight:700,fontSize:13}}>编辑课文</div>
-            <div style={{fontSize:11,color:"#94a3b8"}}>手动修改课程和汉字</div>
+      {P.state.devMode && (
+        <button onClick={() => { P.setCtx({selBook: b}); P.setPage("edit"); }} style={{...S.lc,background:"linear-gradient(135deg,rgba(251,146,60,0.12),rgba(249,115,22,0.12))",border:"2px solid #fb923c"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:22}}>{"🛠️"}</span>
+            <div>
+              <div style={{fontWeight:700,fontSize:13}}>编辑课文（开发者）</div>
+              <div style={{fontSize:11,color:"#94a3b8"}}>修改课程，保存后可下载 App.jsx</div>
+            </div>
           </div>
-        </div>
-        <span style={{fontSize:16,color:"#fb923c"}}>{"›"}</span>
-      </button>
+          <span style={{fontSize:16,color:"#fb923c"}}>{"›"}</span>
+        </button>
+      )}
       {lessonNums.map(l => <LessonCard key={l} b={b} l={l} info={bookData.lessons[l]} P={P} />)}
     </div>
   );
@@ -701,6 +722,16 @@ function SetPage({P}) {
         <button onClick={()=>{if(confirm("恢复所有课本为原版？\n（学习记录不受影响）")){P.setOverrides(null);P.setPage("home");}}} style={{...S.btn,background:"#fef3c7",color:"#92400e",fontSize:12}}>📚 恢复原版课本</button>
       </div>
 
+      {P.state.devMode && (
+        <div style={{...S.card,border:"2px solid #fb923c"}}>
+          <div style={{fontSize:12,fontWeight:700,marginBottom:4,color:"#c2410c"}}>🛠️ 开发者模式</div>
+          <div style={{fontSize:11,color:"#94a3b8",marginBottom:6,lineHeight:1.4}}>
+            已启用。在"选择课本"页面可看到"编辑课文"选项。
+          </div>
+          <button onClick={()=>P.setState(s=>({...s,devMode:false}))} style={{...S.btn,background:"#fef3c7",color:"#92400e",fontSize:12}}>关闭开发者模式</button>
+        </div>
+      )}
+
       <div style={S.card}>
         <div style={{fontSize:11,color:"#94a3b8",lineHeight:1.5}}>识字乐园 · 第一至五册<br/>{CHARS.length}个汉字 · {BOOKS.length}本书</div>
       </div>
@@ -773,6 +804,59 @@ function EditPage({P}) {
     P.setPage("lessons");
   };
 
+  // Export all current book data as JS code to paste into App.jsx
+  const exportCode = () => {
+    // Build the FULL DATA object (all books) — use overrides where they exist
+    const allData = {};
+    for (const bookNum of BOOKS) {
+      const src = getBookData(bookNum, P.overrides);
+      // For the currently-edited book, use the in-progress edits (not yet saved)
+      if (bookNum === b) {
+        const newLessons = {};
+        for (const l of Object.keys(lessons)) {
+          const charsText = lessons[l].charsText.replace(/\s/g, "");
+          const chars = [];
+          for (const ch of charsText) {
+            const known = CHAR_PINYIN[ch];
+            if (known) chars.push([ch, known.p, ch+"子", "学"+ch, known.i, known.f]);
+            else chars.push([ch, "?", ch, ch, "", ""]);
+          }
+          newLessons[l] = { name: lessons[l].name, chars };
+        }
+        allData[bookNum] = { name: bookName, lessons: newLessons };
+      } else {
+        allData[bookNum] = src;
+      }
+    }
+
+    // Format as JS code
+    let code = "const DATA = {\n";
+    for (const bn of BOOKS) {
+      const bd = allData[bn];
+      code += "  " + bn + ": {\n";
+      code += "    name: " + JSON.stringify(bd.name) + ", lessons: {\n";
+      for (const ln of Object.keys(bd.lessons).map(Number).sort((a,c)=>a-c)) {
+        const ld = bd.lessons[ln];
+        code += "      " + ln + ": { name:" + JSON.stringify(ld.name) + ", chars: [\n";
+        for (const ch of ld.chars) {
+          code += "        " + JSON.stringify(ch) + ",\n";
+        }
+        code += "      ]},\n";
+      }
+      code += "    }\n";
+      code += "  },\n";
+    }
+    code += "};\n";
+
+    // Copy to clipboard + show in a textarea
+    navigator.clipboard.writeText(code).then(() => {
+      alert("✅ 已复制到剪贴板！\n\n下一步：打开 App.jsx，替换掉现有的 const DATA = { ... }; 块。");
+    }).catch(() => {
+      // Fallback: put in a prompt
+      window.prompt("请复制以下代码，粘贴到 App.jsx 中替换 const DATA = {...}:", code);
+    });
+  };
+
   const reset = () => {
     if (!confirm("恢复原始课程数据？")) return;
     const newOverrides = {...(P.overrides || {})};
@@ -832,9 +916,13 @@ function EditPage({P}) {
         <div style={{fontSize:11,color:"#64748b",lineHeight:1.5,marginBottom:6}}>
           💡 拼音会自动识别（从已有字库）。不认识的字会标记为 ?，可以先保存后稍后补充。
         </div>
-        <div style={{display:"flex",gap:6}}>
+        <div style={{display:"flex",gap:6,marginBottom:6}}>
           <button onClick={save} style={{...S.btn,flex:1,background:"linear-gradient(135deg,#4ade80,#22c55e)",fontSize:14}}>💾 保存</button>
           <button onClick={reset} style={{...S.btn,flex:1,background:"#fee2e2",color:"#b91c1c",fontSize:13}}>恢复原版</button>
+        </div>
+        <button onClick={exportCode} style={{...S.btn,width:"100%",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",fontSize:12}}>📋 生成代码（复制到 App.jsx 以永久保存）</button>
+        <div style={{fontSize:10,color:"#94a3b8",marginTop:4,lineHeight:1.4}}>
+          将 DATA 常量复制到剪贴板。粘贴到 App.jsx 文件中替换原来的 DATA，再上传到 GitHub，所有用户就都能看到更新。
         </div>
       </div>
     </div>
