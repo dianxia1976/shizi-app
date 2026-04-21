@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
+// ─── Feedback Configuration ─────────────────────────────────────
+// TODO: Replace FEEDBACK_URL with your actual Google Form link once created
+const FEEDBACK_URL = "https://forms.google.com/your-form-id-here";
+const FEEDBACK_EMAIL = "your-email@example.com";
+
 // ─── Compact Character Data: [char, pinyin, word1, word2, initial, final] ────
 // Grouped by [book][lesson]
 const DATA = {
@@ -71,130 +76,111 @@ const DATA = {
     name: "第五册", lessons: {
       1: { name:"去超市", chars: [
         ["超","chao","超市","超人","ch","ao"],["市","shi","超市","城市","sh","i"],
-        ["购","gou","购物","购买","g","ou"],["单","dan","清单","单子","d","an"],
+        ["周","zhou","周末","一周","zh","ou"],["末","mo","周末","末日","m","o"],
+        ["列","lie","列出","排列","l","ie"],["购","gou","购物","购买","g","ou"],
+        ["单","dan","清单","单子","d","an"],["节","jie","节约","节日","j","ie"],
+        ["约","yue","节约","大约","y","ue"],["行","xing","行动","行走","x","ing"],
         ["品","pin","食品","品尝","p","in"],["裙","qun","裙子","裙装","q","un"],
         ["挑","tiao","挑选","挑出","t","iao"],["选","xuan","选择","选出","x","uan"],
-        ["新","xin","新鲜","新年","x","in"],["鲜","xian","新鲜","鱼鲜","x","ian"],
-        ["节","jie","节约","节日","j","ie"],["约","yue","节约","大约","y","ue"],
-        ["折","zhe","打折","折起","zh","e"],["错","cuo","错误","不错","c","uo"],
-        ["列","lie","列出","排列","l","ie"],["颜","yan","颜色","容颜","y","an"],
-        ["行","xing","行动","行走","x","ing"],["末","mo","末日","周末","m","o"],
-        ["周","zhou","周末","一周","zh","ou"]
+        ["新","xin","新鲜","新年","x","in"],["错","cuo","错误","不错","c","uo"],
+        ["颜","yan","颜色","容颜","y","an"]
       ]},
       2: { name:"去露营", chars: [
-        ["露","lu","露营","露水","l","u"],["营","ying","营地","露营","y","ing"],
-        ["搭","da","搭帐篷","搭车","d","a"],["帐","zhang","帐篷","帐号","zh","ang"],
+        ["露","lu","露营","露水","l","u"],["营","ying","露营","营地","y","ing"],
+        ["滩","tan","沙滩","河滩","t","an"],["搭","da","搭帐篷","搭车","d","a"],
+        ["油","you","油画","食油","y","ou"],["换","huan","换衣","交换","h","uan"],
+        ["泳","yong","游泳","泳池","y","ong"],["聊","liao","聊天","闲聊","l","iao"],
         ["烤","kao","烧烤","烤肉","k","ao"],["浪","lang","海浪","浪花","l","ang"],
-        ["滩","tan","沙滩","河滩","t","an"],["泳","yong","游泳","泳池","y","ong"],
-        ["油","you","油画","食油","y","ou"],["躺","tang","躺下","躺着","t","ang"],
-        ["换","huan","换衣","交换","h","uan"],["聊","liao","聊天","闲聊","l","iao"]
+        ["躺","tang","躺下","躺着","t","ang"],["梦","meng","做梦","梦想","m","eng"]
       ]},
-      3: { name:"中华文化大乐园", chars: [
-        ["功","gong","功夫","成功","g","ong"],["夫","fu","功夫","夫人","f","u"],
-        ["武","wu","武术","武功","w","u"],["术","shu","武术","艺术","sh","u"],
-        ["舞","wu","跳舞","舞蹈","w","u"],["艺","yi","艺术","手艺","y","i"],
-        ["响","xiang","响亮","音响","x","iang"],["民","min","人民","民族","m","in"],
-        ["族","zu","民族","家族","z","u"],["统","tong","传统","统一","t","ong"],
+      3: { name:"快乐的\"中华文化大乐园\"", chars: [
+        ["者","zhe","作者","学者","zh","e"],["始","shi","开始","始终","sh","i"],
+        ["民","min","人民","民族","m","in"],["族","zu","民族","家族","z","u"],
+        ["舞","wu","跳舞","舞蹈","w","u"],["功","gong","功夫","成功","g","ong"],
+        ["影","ying","影子","电影","y","ing"],["捏","nie","捏泥","捏紧","n","ie"],
+        ["统","tong","传统","统一","t","ong"],["响","xiang","响亮","音响","x","iang"],
         ["敢","gan","勇敢","敢做","g","an"],["勇","yong","勇敢","勇气","y","ong"],
         ["巧","qiao","心灵手巧","巧手","q","iao"],["骑","qi","骑马","骑车","q","i"],
-        ["者","zhe","作者","学者","zh","e"],["捏","nie","捏泥","捏紧","n","ie"]
+        ["艺","yi","艺术","手艺","y","i"],["彩","cai","彩色","精彩","c","ai"]
       ]},
       4: { name:"狼和小羊", chars: [
-        ["反","fan","反正","反对","f","an"],["坏","huai","坏人","坏话","h","uai"],
-        ["害","hai","害怕","害人","h","ai"],["脏","zang","弄脏","肮脏","z","ang"],
-        ["近","jin","附近","近来","j","in"],["惊","jing","吃惊","惊奇","j","ing"],
-        ["借","jie","借口","借用","j","ie"],["口","kou","借口","口水","k","ou"],
-        ["轻","qing","轻轻","轻重","q","ing"],["亲","qin","亲爱","亲人","q","in"],
-        ["先","xian","先生","首先","x","ian"]
+        ["总","zong","总是","总共","z","ong"],["脏","zang","弄脏","肮脏","z","ang"],
+        ["害","hai","害怕","害人","h","ai"],["惊","jing","吃惊","惊奇","j","ing"],
+        ["轻","qing","轻轻","轻重","q","ing"],["算","suan","算了","计算","s","uan"],
+        ["坏","huai","坏人","坏话","h","uai"],["近","jin","附近","近来","j","in"],
+        ["反","fan","反正","反对","f","an"]
       ]},
       5: { name:"狐狸和葡萄", chars: [
-        ["葡","pu","葡萄","葡萄酒","p","u"],["萄","tao","葡萄","葡萄园","t","ao"],
-        ["狐","hu","狐狸","狐狸精","h","u"],["架","jia","葡萄架","书架","j","ia"],
-        ["够","gou","够了","足够","g","ou"],["垂","chui","垂头","垂下","ch","ui"],
-        ["摘","zhai","摘下","采摘","zh","ai"],["丧","sang","垂头丧气","丧气","s","ang"],
-        ["甜","tian","甜美","甜蜜","t","ian"],["运","yun","运气","运动","y","un"],
-        ["总","zong","总是","最后","z","ong"],["最","zui","最后","最好","z","ui"],
-        ["准","zhun","准备","准时","zh","un"],["算","suan","算了","计算","s","uan"],
-        ["照","zhao","照片","按照","zh","ao"]
+        ["狐","hu","狐狸","狐狸精","h","u"],["葡","pu","葡萄","葡萄酒","p","u"],
+        ["萄","tao","葡萄","葡萄园","t","ao"],["照","zhao","照片","按照","zh","ao"],
+        ["架","jia","葡萄架","书架","j","ia"],["运","yun","运气","运动","y","un"],
+        ["甜","tian","甜美","甜蜜","t","ian"],["准","zhun","准备","准时","zh","un"],
+        ["摘","zhai","摘下","采摘","zh","ai"],["够","gou","够了","足够","g","ou"],
+        ["垂","chui","垂头","垂下","ch","ui"],["丧","sang","垂头丧气","丧气","s","ang"]
       ]},
       6: { name:"成语二则·闻鸡起舞 画龙点睛", chars: [
-        ["闻","wen","闻鸡起舞","新闻","w","en"],["睛","jing","眼睛","画龙点睛","j","ing"],
-        ["晨","chen","早晨","晨光","ch","en"],["驾","jia","驾车","驾驶","j","ia"],
-        ["绝","jue","拒绝","绝对","j","ue"],["拒","ju","拒绝","拒之","j","u"],
-        ["但","dan","但是","不但","d","an"],["典","dian","字典","典型","d","ian"],
-        ["断","duan","不断","断开","d","uan"],["补","bu","补上","修补","b","u"],
-        ["励","li","鼓励","励志","l","i"],["效","xiao","效果","有效","x","iao"],
-        ["提","ti","提出","提起","t","i"],["理","li","理想","道理","l","i"],
-        ["信","xin","相信","信心","x","in"],["互","hu","互相","互动","h","u"],
-        ["知","zhi","知识","知道","zh","i"],["识","shi","知识","认识","sh","i"],
-        ["认","ren","认识","认为","r","en"],["为","wei","认为","为了","w","ei"]
+        ["励","li","鼓励","励志","l","i"],["晨","chen","早晨","晨光","ch","en"],
+        ["断","duan","不断","断开","d","uan"],["武","wu","武术","武功","w","u"],
+        ["章","zhang","文章","章节","zh","ang"],["效","xiao","效果","有效","x","iao"],
+        ["晴","qing","晴天","天晴","q","ing"],["但","dan","但是","不但","d","an"],
+        ["补","bu","补上","修补","b","u"],["绝","jue","拒绝","绝对","j","ue"],
+        ["拒","ju","拒绝","拒之","j","u"],["信","xin","相信","信心","x","in"],
+        ["求","qiu","请求","要求","q","iu"],["提","ti","提出","提起","t","i"],
+        ["驾","jia","驾车","驾驶","j","ia"]
       ]},
       7: { name:"唐人街", chars: [
-        ["岸","an","海岸","岸边","","an"],["所","suo","所以","场所","s","uo"],
-        ["独","du","独立","独自","d","u"],["集","ji","集中","集合","j","i"],
-        ["旧","jiu","旧的","旧书","j","iu"],["卖","mai","买卖","出卖","m","ai"],
-        ["强","qiang","强大","坚强","q","iang"],["侨","qiao","华侨","侨胞","q","iao"],
-        ["荣","rong","光荣","荣誉","r","ong"],["商","shang","商店","商人","sh","ang"],
-        ["繁","fan","繁华","繁忙","f","an"],["联","lian","联系","联合","l","ian"],
-        ["笼","long","笼子","鸟笼","l","ong"],["特","te","特别","特点","t","e"],
-        ["迎","ying","欢迎","迎接","y","ing"],["越","yue","越来越","穿越","y","ue"],
-        ["来","lai","来自","来了","l","ai"],["自","zi","来自","自己","z","i"],
-        ["刚","gang","刚才","刚好","g","ang"],["各","ge","各地","各种","g","e"],
-        ["地","di","各地","土地","d","i"]
+        ["繁","fan","繁华","繁忙","f","an"],["荣","rong","光荣","荣誉","r","ong"],
+        ["强","qiang","强大","坚强","q","iang"],["所","suo","所以","场所","s","uo"],
+        ["侨","qiao","华侨","侨胞","q","iao"],["集","ji","集中","集合","j","i"],
+        ["旧","jiu","旧的","旧书","j","iu"],["岸","an","海岸","岸边","","an"],
+        ["独","du","独立","独自","d","u"],["商","shang","商店","商人","sh","ang"],
+        ["卖","mai","买卖","出卖","m","ai"],["越","yue","越来越","穿越","y","ue"],
+        ["贴","tie","贴上","粘贴","t","ie"],["联","lian","联系","联合","l","ian"],
+        ["笼","long","笼子","鸟笼","l","ong"],["迎","ying","欢迎","迎接","y","ing"]
       ]},
-      8: { name:"太空英雄", chars: [
-        ["宝","bao","宝贝","珍宝","b","ao"],["充","chong","充满","充分","ch","ong"],
-        ["射","she","发射","射击","sh","e"],["升","sheng","升空","上升","sh","eng"],
-        ["艘","sou","一艘","艘船","s","ou"],["顺","shun","顺利","顺风","sh","un"],
-        ["厅","ting","大厅","客厅","t","ing"],["钟","zhong","钟","时钟","zh","ong"],
-        ["永","yong","永远","永久","y","ong"],["英","ying","英雄","英语","y","ing"],
-        ["雄","xiong","英雄","雄伟","x","iong"],["歇","xie","歇息","歇一下","x","ie"],
-        ["载","zai","载人","装载","z","ai"],["另","ling","另外","另一","l","ing"],
-        ["秘","mi","秘密","秘书","m","i"],["航","hang","航天","航行","h","ang"],
-        ["分","fen","分钟","分开","f","en"],["成","cheng","成功","成为","ch","eng"],
-        ["发","fa","发射","出发","f","a"],["出","chu","出发","出生","ch","u"],
-        ["满","man","充满","满足","m","an"],["来","lai","来自","来到","l","ai"]
+      8: { name:"\"神舟\"飞天", chars: [
+        ["艘","sou","一艘","艘船","s","ou"],["载","zai","载人","装载","z","ai"],
+        ["航","hang","航天","航行","h","ang"],["射","she","发射","射击","sh","e"],
+        ["升","sheng","升空","上升","sh","eng"],["钟","zhong","分钟","时钟","zh","ong"],
+        ["厅","ting","大厅","客厅","t","ing"],["另","ling","另外","另一","l","ing"],
+        ["宝","bao","宝贝","珍宝","b","ao"],["英","ying","英雄","英语","y","ing"],
+        ["雄","xiong","英雄","雄伟","x","iong"],["顺","shun","顺利","顺风","sh","un"],
+        ["充","chong","充满","充分","ch","ong"],["秘","mi","秘密","秘书","m","i"],
+        ["永","yong","永远","永久","y","ong"],["歇","xie","歇息","歇一下","x","ie"]
       ]},
-      9: { name:"古诗·吟咏", chars: [
-        ["扩","kuo","扩大","扩张","k","uo"],["恐","kong","恐怕","恐惧","k","ong"],
-        ["何","he","任何","何时","h","e"],["旧","jiu","旧时","旧友","j","iu"],
-        ["吟","yin","吟咏","吟唱","y","in"],["临","lin","临近","面临","l","in"],
-        ["慈","ci","慈爱","慈祥","c","i"],["迟","chi","迟到","迟早","ch","i"],
-        ["缝","feng","缝补","缝衣","f","eng"],["改","gai","改变","改动","g","ai"],
-        ["归","gui","归来","回归","g","ui"],["童","tong","儿童","童年","t","ong"],
-        ["线","xian","线","红线","x","ian"],["衰","shuai","衰老","衰退","sh","uai"],
-        ["无","wu","无边","无法","w","u"],["寸","cun","寸","尺寸","c","un"]
+      9: { name:"古诗二首·游子吟 回乡偶书", chars: [
+        ["吟","yin","吟咏","吟唱","y","in"],["慈","ci","慈爱","慈祥","c","i"],
+        ["线","xian","线","红线","x","ian"],["临","lin","临近","面临","l","in"],
+        ["缝","feng","缝补","缝衣","f","eng"],["恐","kong","恐怕","恐惧","k","ong"],
+        ["迟","chi","迟到","迟早","ch","i"],["归","gui","归来","回归","g","ui"],
+        ["寸","cun","寸","尺寸","c","un"],["无","wu","无边","无法","w","u"],
+        ["改","gai","改变","改动","g","ai"],["衰","shuai","衰老","衰退","sh","uai"],
+        ["童","tong","儿童","童年","t","ong"],["何","he","任何","何时","h","e"]
       ]},
       10: { name:"曹冲称象", chars: [
-        ["称","cheng","称","称象","ch","eng"],["秤","cheng","秤","杆秤","ch","eng"],
-        ["冲","chong","曹冲","冲动","ch","ong"],["沉","chen","沉下","深沉","ch","en"],
-        ["大","da","大象","大人","d","a"],["官","guan","官员","做官","g","uan"],
-        ["员","yuan","官员","成员","y","uan"],["摇","yao","摇头","摇动","y","ao"],
-        ["沿","yan","沿着","沿江","y","an"],["赶","gan","赶紧","赶快","g","an"],
-        ["重","zhong","重量","重要","zh","ong"],["赞","zan","称赞","赞美","z","an"],
-        ["点","dian","点头","一点","d","ian"]
+        ["冲","chong","曹冲","冲动","ch","ong"],["称","cheng","称","称象","ch","eng"],
+        ["官","guan","官员","做官","g","uan"],["重","zhong","重量","重要","zh","ong"],
+        ["秤","cheng","秤","杆秤","ch","eng"],["遥","yao","遥远","遥望","y","ao"],
+        ["赶","gan","赶紧","赶快","g","an"],["沿","yan","沿着","沿江","y","an"],
+        ["沉","chen","沉下","深沉","ch","en"],["赞","zan","称赞","赞美","z","an"]
       ]},
-      11: { name:"设计·现代", chars: [
-        ["参","can","参加","参观","c","an"],["而","er","而且","从而","","er"],
+      11: { name:"贝聿铭", chars: [
+        ["镜","jing","眼镜","镜子","j","ing"],["参","can","参加","参观","c","an"],
+        ["任","ren","任何","责任","r","en"],["而","er","而且","从而","","er"],
+        ["拍","pai","拍照","拍手","p","ai"],["唯","wei","唯一","唯有","w","ei"],
         ["设","she","设计","设备","sh","e"],["计","ji","设计","计算","j","i"],
-        ["精","jing","精美","精彩","j","ing"],["镜","jing","眼镜","镜子","j","ing"],
-        ["唯","wei","唯一","唯有","w","ei"],["任","ren","任何","责任","r","en"],
-        ["典","dian","经典","典型","d","ian"],["拍","pai","拍照","拍手","p","ai"],
-        ["出","chu","出现","出去","ch","u"],["现","xian","现代","现在","x","ian"],
-        ["止","zhi","停止","止步","zh","i"],["怀","huai","怀念","胸怀","h","uai"],
-        ["特","te","特别","特点","t","e"],["整","zheng","整天","整理","zh","eng"]
+        ["受","shou","受到","接受","sh","ou"],["扩","kuo","扩大","扩张","k","uo"],
+        ["怀","huai","怀念","胸怀","h","uai"],["精","jing","精美","精彩","j","ing"],
+        ["特","te","特别","特点","t","e"],["赢","ying","赢得","输赢","y","ing"],
+        ["止","zhi","停止","止步","zh","i"],["典","dian","经典","典型","d","ian"]
       ]},
-      12: { name:"伟大的著作", chars: [
-        ["暗","an","暗中","黑暗","","an"],["部","bu","部分","全部","b","u"],
-        ["此","ci","从此","因此","c","i"],["纲","gang","大纲","纲要","g","ang"],
-        ["广","guang","广大","宽广","g","uang"],["留","liu","留下","留学","l","iu"],
-        ["穷","qiong","穷人","贫穷","q","iong"],["适","shi","合适","适合","sh","i"],
-        ["误","wu","错误","误会","w","u"],["译","yi","翻译","译文","y","i"],
-        ["珍","zhen","珍贵","珍爱","zh","en"],["性","xing","个性","性格","x","ing"],
-        ["改","gai","改变","改动","g","ai"],["变","bian","改变","变化","b","ian"],
-        ["感","gan","感谢","感动","g","an"],["谢","xie","感谢","谢谢","x","ie"],
-        ["著","zhu","著作","名著","zh","u"],["作","zuo","著作","作品","z","uo"],
-        ["伟","wei","伟大","伟人","w","ei"]
+      12: { name:"李时珍", chars: [
+        ["珍","zhen","珍贵","珍爱","zh","en"],["穷","qiong","穷人","贫穷","q","iong"],
+        ["留","liu","留下","留学","l","iu"],["暗","an","暗中","黑暗","","an"],
+        ["适","shi","合适","适合","sh","i"],["此","ci","从此","因此","c","i"],
+        ["误","wu","错误","误会","w","u"],["性","xing","个性","性格","x","ing"],
+        ["纲","gang","大纲","纲要","g","ang"],["部","bu","部分","全部","b","u"],
+        ["译","yi","翻译","译文","y","i"],["广","guang","广大","宽广","g","uang"]
       ]},
     }
   },
@@ -309,7 +295,25 @@ export default function App(){
     });
   }, [overrides]);
 
-  useEffect(()=>{const td=new Date().toDateString();if(state.dt.date!==td)setState(s=>({...s,dt:{r:{d:0,t:8},p:{d:0,t:4},w:{d:0,t:3},date:td}}));},[state.dt.date]);
+  // One-time cleanup: ensure status is consistent with fam value, and fix known-but-low-fam chars
+  useEffect(() => {
+    setState(s => {
+      let changed = false;
+      const chars = s.chars.map(c => {
+        // If marked known but fam is somehow low, boost it so it stays known
+        if (c.st === "known" && c.fam < 4) {
+          changed = true;
+          return {...c, fam: 5};
+        }
+        return c;
+      });
+      return changed ? {...s, chars} : s;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Reset daily task counters when date changes
+  useEffect(()=>{const td=new Date().toDateString();if(state.dt.date!==td)setState(s=>({...s,dt:{r:{...s.dt.r,d:0},p:{...s.dt.p,d:0},w:{...s.dt.w,d:0},date:td}}));},[state.dt.date]);
 
   const cnt=useCallback(st=>state.chars.filter(c=>c.st===st).length,[state.chars]);
   const cntFor=useCallback((st,idxs)=>state.chars.filter((c,i)=>idxs.includes(i)&&c.st===st).length,[state.chars]);
@@ -318,17 +322,39 @@ export default function App(){
 
   const chkA=useCallback(ns=>{const k=ns.chars.filter(c=>c.st==="known").length;for(const a of ACHS){if(!ns.ua.includes(a.id)&&a.ck(k)){ns={...ns,ua:[...ns.ua,a.id]};const ac=a;setTimeout(()=>{setToast(ac);setTimeout(()=>setToast(null),3000);},300);}}return ns;},[]);
 
-  const upd=useCallback((idx,res)=>{setState(prev=>{const chars=prev.chars.map((c,i)=>{if(i!==idx)return c;const n={...c,sc:c.sc+1};if(res==="known")n.fam+=2;else if(res==="review")n.fam+=1;else{n.fam-=1;n.wc++;}n.st=n.fam>=4?"known":n.fam>=1?"review":"unknown";return n;});const dt={...prev.dt,r:{...prev.dt.r,d:Math.min(prev.dt.r.d+1,prev.dt.r.t)}};return chkA({...prev,chars,dt,ts:prev.ts+(res==="known"?2:res==="review"?1:0)});});},[chkA]);
+  const upd=useCallback((idx,res)=>{setState(prev=>{const chars=prev.chars.map((c,i)=>{
+    if(i!==idx)return c;
+    const n={...c,sc:c.sc+1};
+    if(res==="known")n.fam+=2;
+    else if(res==="review")n.fam+=1;
+    else{n.fam-=1;n.wc++;}
+    // Clamp fam to reasonable range
+    if(n.fam>10)n.fam=10;
+    if(n.fam<-2)n.fam=-2;
+    // Status logic:
+    // - Answering "认识" immediately moves to 已认识 (known).
+    // - Answering "有点印象" moves to 待复习 (review).
+    // - Once known, stays known (no demotion from occasional mistakes).
+    if(c.st==="known") n.st="known";
+    else if(res==="known") n.st="known";
+    else n.st=n.fam>=1?"review":"unknown";
+    return n;
+  });const dt={...prev.dt,r:{...prev.dt.r,d:Math.min(prev.dt.r.d+1,prev.dt.r.t)}};return chkA({...prev,chars,dt,ts:prev.ts+(res==="known"?2:res==="review"?1:0)});});},[chkA]);
   const rP=useCallback(()=>setState(p=>{const dt={...p.dt,p:{...p.dt.p,d:Math.min(p.dt.p.d+1,p.dt.p.t)}};return chkA({...p,dt,tp:(p.tp||0)+1});}),[chkA]);
   const rW=useCallback(()=>setState(p=>{const dt={...p.dt,w:{...p.dt.w,d:Math.min(p.dt.w.d+1,p.dt.w.t)}};return chkA({...p,dt,tw:(p.tw||0)+1});}),[chkA]);
 
   const startDeck=(indices)=>{const deck=indices.map(i=>({...state.chars[i],di:i})).sort(()=>Math.random()-0.5);setCtx({deck,cur:0,res:{t:0,k:0,r:0,u:0,sc:0}});setPage("study");};
   const startBook=(b)=>{const idxs=CHARS.map((c,i)=>c.b===b?i:-1).filter(i=>i>=0);startDeck(idxs.slice(0,20));};
   const startLesson=(b,l)=>{const idxs=CHARS.map((c,i)=>(c.b===b&&c.l===l)?i:-1).filter(i=>i>=0);startDeck(idxs);};
-  const startAll=()=>{const idxs=CHARS.map((_,i)=>i);startDeck(idxs.slice(0,25));};
-  const startReview=()=>{const idxs=state.chars.map((c,i)=>c.st!=="known"?i:-1).filter(i=>i>=0).sort((a,b)=>state.chars[a].fam-state.chars[b].fam).slice(0,20);if(idxs.length)startDeck(idxs);};
+  // Use user-configured session size (stored in state.dt), default to 25 for mixed / 20 for targeted
+  const sessionSize = (state.sessionSize||25);
+  const startAll=()=>{const idxs=CHARS.map((_,i)=>i).sort(()=>Math.random()-0.5);startDeck(idxs.slice(0,sessionSize));};
+  // Review: characters already studied but not mastered (review state only)
+  const startReview=()=>{const idxs=state.chars.map((c,i)=>c.st==="review"?i:-1).filter(i=>i>=0).sort((a,b)=>state.chars[a].fam-state.chars[b].fam).slice(0,sessionSize);if(idxs.length)startDeck(idxs);};
+  // New: characters never studied (unknown state only)
+  const startNew=()=>{const idxs=state.chars.map((c,i)=>c.st==="unknown"?i:-1).filter(i=>i>=0).slice(0,sessionSize);if(idxs.length)startDeck(idxs);};
 
-  const P={state,setState,page,setPage,ctx,setCtx,cnt,cntFor,upd,rP,rW,startBook,startLesson,startAll,startReview,toast,ACHS,overrides,setOverrides};
+  const P={state,setState,page,setPage,ctx,setCtx,cnt,cntFor,upd,rP,rW,startBook,startLesson,startAll,startReview,startNew,toast,ACHS,overrides,setOverrides};
 
   return(<div style={S.wrap}><div style={S.app}>
     {toast&&<div style={S.toast}><span style={{fontSize:26}}>{toast.e}</span><div><div style={{fontWeight:700,fontSize:13}}>成就解锁！</div><div style={{fontSize:12,opacity:0.8}}>{toast.n}</div></div></div>}
@@ -349,9 +375,10 @@ export default function App(){
 
 // ─── Home ───────────────────────────────────────────────────────
 function HomePage({P}){
-  const{state,cnt,startAll,startReview,setPage,setState}=P;
+  const{state,cnt,startAll,startReview,startNew,setPage,setState}=P;
   const dt=state.dt;const ad=dt.r.d>=dt.r.t&&dt.p.d>=dt.p.t&&dt.w.d>=dt.w.t;
-  const rc=state.chars.filter(c=>c.st!=="known").length;
+  const reviewCount = cnt("review");
+  const unknownCount = cnt("unknown");
   const[tapCount,setTapCount]=useState(0);
   const tapTimerRef=useRef(null);
 
@@ -373,21 +400,33 @@ function HomePage({P}){
       <div style={S.logo} onClick={onLogoTap}>识字乐园</div>
       <div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>第一至五册 · {CHARS.length}个汉字 {state.devMode && "· 🛠️"}</div>
     </div>
+    <div style={{fontSize:11,color:"#64748b",textAlign:"center",marginTop:4,marginBottom:2}}>点击方块开始学习</div>
     <div style={S.sr}>
-      <SB l="已认识" v={cnt("known")} c="#4ade80" e="✅"/>
-      <SB l="待复习" v={cnt("review")} c="#fbbf24" e="📖"/>
-      <SB l="未认识" v={cnt("unknown")} c="#f87171" e="❓"/>
+      <SB l="已认识" v={cnt("known")} c="#4ade80" e="✅" onClick={()=>setPage("report")}/>
+      <SB l="待复习" v={reviewCount} c="#fbbf24" e="📖" onClick={reviewCount>0?startReview:null}/>
+      <SB l="未学过" v={unknownCount} c="#f87171" e="❓" onClick={unknownCount>0?startNew:null}/>
     </div>
     <div style={S.card}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}><span style={S.ct}>今日任务</span><span style={{fontSize:12,color:"#f97316"}}>🔥{state.streak}天</span></div>
       <TB l="认字" d={dt.r.d} t={dt.r.t} c="#4ade80"/><TB l="拼音" d={dt.p.d} t={dt.p.t} c="#60a5fa"/><TB l="写字" d={dt.w.d} t={dt.w.t} c="#c084fc"/>
       {ad&&<div style={{textAlign:"center",marginTop:4,fontSize:12,color:"#4ade80",fontWeight:600}}>🎉 任务完成！</div>}</div>
     <button style={{...S.btn,background:"linear-gradient(135deg,#60a5fa,#818cf8)"}} onClick={()=>setPage("books")}>📚 选择课本</button>
-    <button style={{...S.btn,background:"linear-gradient(135deg,#a78bfa,#c084fc)"}} onClick={startAll}>🎲 全部混合（随机25字）</button>
-    {rc>0&&<button style={{...S.btn,background:"linear-gradient(135deg,#fb923c,#f97316)"}} onClick={startReview}>📝 复习错字 ({rc})</button>}
+    <button style={{...S.btn,background:"linear-gradient(135deg,#a78bfa,#c084fc)"}} onClick={startAll}>🎲 全部混合（随机{state.sessionSize||25}字）</button>
     <div style={S.bnav}><NB e="📊" l="报告" o={()=>setPage("report")}/><NB e="🏅" l="成就" o={()=>setPage("ach")}/><NB e="⚙️" l="设置" o={()=>setPage("set")}/></div>
   </div>);
 }
-function SB({l,v,c,e}){return(<div style={{...S.bub,borderColor:c}}><span style={{fontSize:16}}>{e}</span><span style={{fontSize:20,fontWeight:800,color:c}}>{v}</span><span style={{fontSize:10,color:"#64748b"}}>{l}</span></div>);}
+function SB({l,v,c,e,onClick}){
+  const clickable = !!onClick;
+  return(
+    <button
+      onClick={onClick||undefined}
+      disabled={!clickable}
+      style={{...S.bub, borderColor:c, cursor: clickable?"pointer":"default", background: clickable?"rgba(255,255,255,0.85)":"rgba(255,255,255,0.6)", border:"2px solid "+c, padding:"6px 3px", fontFamily:"inherit"}}>
+      <span style={{fontSize:16}}>{e}</span>
+      <span style={{fontSize:20,fontWeight:800,color:c}}>{v}</span>
+      <span style={{fontSize:10,color:"#64748b"}}>{l}</span>
+    </button>
+  );
+}
 function TB({l,d,t,c}){return(<div style={{marginBottom:4}}><div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:1}}><span>{l}</span><span>{d}/{t}</span></div><div style={{height:5,borderRadius:3,background:"#e2e8f0",overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(100,d/t*100)}%`,background:c,borderRadius:3,transition:"width 0.4s"}}/></div></div>);}
 function NB({e,l,o}){return(<button onClick={o} style={S.nbtn}><span style={{fontSize:18}}>{e}</span><span style={{fontSize:9}}>{l}</span></button>);}
 function Bk({o}){return <button onClick={o} style={S.bk}>← 返回</button>;}
@@ -704,6 +743,25 @@ function SetPage({P}) {
       </div>
 
       <div style={S.card}>
+        <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>🎯 每日任务目标</div>
+        <div style={{fontSize:11,color:"#94a3b8",marginBottom:8,lineHeight:1.4}}>根据孩子情况自行调整</div>
+        <DailyGoalRow label="认字" value={P.state.dt.r.t} color="#4ade80"
+          onChange={(v)=>P.setState(s=>({...s,dt:{...s.dt,r:{...s.dt.r,t:v}}}))} />
+        <DailyGoalRow label="拼音" value={P.state.dt.p.t} color="#60a5fa"
+          onChange={(v)=>P.setState(s=>({...s,dt:{...s.dt,p:{...s.dt.p,t:v}}}))} />
+        <DailyGoalRow label="写字" value={P.state.dt.w.t} color="#c084fc"
+          onChange={(v)=>P.setState(s=>({...s,dt:{...s.dt,w:{...s.dt.w,t:v}}}))} />
+      </div>
+
+      <div style={S.card}>
+        <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>🎲 每次练习字数</div>
+        <div style={{fontSize:11,color:"#94a3b8",marginBottom:8,lineHeight:1.4}}>"全部混合"、"待复习"、"未学过"每次练习的字数</div>
+        <DailyGoalRow label="练习字数" value={P.state.sessionSize||25} color="#a78bfa"
+          min={5} max={100} step={5}
+          onChange={(v)=>P.setState(s=>({...s,sessionSize:v}))} />
+      </div>
+
+      <div style={S.card}>
         <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>💾 本地存储</div>
         <div style={{fontSize:11,color:"#64748b",marginBottom:6}}>状态：{storageStatus}</div>
         <div style={{fontSize:11,color:"#94a3b8",lineHeight:1.5}}>学习记录和自定义课本会自动保存在本设备。清除浏览器数据会丢失，建议定期导出备份。</div>
@@ -718,7 +776,19 @@ function SetPage({P}) {
       </div>
 
       <div style={S.card}>
-        <button onClick={()=>{if(confirm("重置全部学习记录？\n（自定义课本不受影响）")){P.setState(mkState());P.setPage("home");}}} style={{...S.btn,background:"#fee2e2",color:"#b91c1c",fontSize:12,marginBottom:6}}>🔄 重置学习记录</button>
+        <button onClick={()=>{
+          if(!confirm("重置全部学习记录？\n（自定义课本、设置不受影响）\n\n点击确定后页面会自动刷新。"))return;
+          // NUCLEAR OPTION: Remove the state from localStorage entirely.
+          // On reload, the app will create a fresh default state.
+          try {
+            window.localStorage.removeItem("shizi_state_v1");
+          } catch(e) {
+            alert("无法访问本地存储，请检查浏览器设置");
+            return;
+          }
+          // Force reload - this bypasses all React state and starts completely fresh
+          window.location.reload();
+        }} style={{...S.btn,background:"#fee2e2",color:"#b91c1c",fontSize:12,marginBottom:6}}>🔄 重置学习记录</button>
         <button onClick={()=>{if(confirm("恢复所有课本为原版？\n（学习记录不受影响）")){P.setOverrides(null);P.setPage("home");}}} style={{...S.btn,background:"#fef3c7",color:"#92400e",fontSize:12}}>📚 恢复原版课本</button>
       </div>
 
@@ -733,7 +803,30 @@ function SetPage({P}) {
       )}
 
       <div style={S.card}>
+        <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>💬 意见反馈</div>
+        <div style={{fontSize:11,color:"#94a3b8",marginBottom:8,lineHeight:1.4}}>帮助我们改进这个 app</div>
+        <button onClick={()=>window.open(FEEDBACK_URL, "_blank")} style={{...S.btn,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",fontSize:13,marginBottom:6}}>📝 填写反馈表</button>
+        <button onClick={()=>window.location.href="mailto:"+FEEDBACK_EMAIL+"?subject=识字乐园反馈"} style={{...S.btn,background:"#e0e7ff",color:"#4338ca",fontSize:12}}>✉️ 发邮件联系</button>
+      </div>
+
+      <div style={S.card}>
         <div style={{fontSize:11,color:"#94a3b8",lineHeight:1.5}}>识字乐园 · 第一至五册<br/>{CHARS.length}个汉字 · {BOOKS.length}本书</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Daily Goal Row component ─────────────────────────────────
+function DailyGoalRow({label, value, color, onChange, min=1, max=100, step=1}) {
+  const dec = () => { if (value > min) onChange(Math.max(min, value - step)); };
+  const inc = () => { if (value < max) onChange(Math.min(max, value + step)); };
+  return (
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0"}}>
+      <span style={{fontSize:13,color:"#334155"}}>{label}</span>
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <button onClick={dec} style={{width:26,height:26,borderRadius:13,border:"none",background:"#e2e8f0",cursor:"pointer",fontSize:14,fontWeight:700,color:"#475569"}}>−</button>
+        <span style={{minWidth:30,textAlign:"center",fontSize:15,fontWeight:700,color:color}}>{value}</span>
+        <button onClick={inc} style={{width:26,height:26,borderRadius:13,border:"none",background:"#e2e8f0",cursor:"pointer",fontSize:14,fontWeight:700,color:"#475569"}}>+</button>
       </div>
     </div>
   );
