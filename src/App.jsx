@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 // ─── Feedback Configuration ─────────────────────────────────────
-// TODO: Replace FEEDBACK_URL with your actual Google Form link once created
-const FEEDBACK_URL = "https://forms.google.com/your-form-id-here";
-const FEEDBACK_EMAIL = "your-email@example.com";
+const FEEDBACK_URL = "https://docs.google.com/forms/d/e/1FAIpQLScXsnKXGNepEqoumcHckZZVhI8ZCi85hI8GHTSf1RNdAA079Q/viewform";
+const FEEDBACK_EMAIL = "shizilepark@gmail.com";
 
 // ─── Compact Character Data: [char, pinyin, word1, word2, initial, final] ────
 // Grouped by [book][lesson]
