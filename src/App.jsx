@@ -4,6 +4,54 @@ import { useState, useEffect, useRef, useCallback } from "react";
 const FEEDBACK_URL = "https://docs.google.com/forms/d/e/1FAIpQLScXsnKXGNepEqoumcHckZZVhI8ZCi85hI8GHTSf1RNdAA079Q/viewform";
 const FEEDBACK_EMAIL = "shizilepark@gmail.com";
 
+// ─── Hanzi Writer loader (lazy-loads from CDN) ─────────────────
+let _hanziWriterPromise = null;
+function loadHanziWriter() {
+  if (typeof window === "undefined") return Promise.reject();
+  if (window.HanziWriter) return Promise.resolve(window.HanziWriter);
+  if (_hanziWriterPromise) return _hanziWriterPromise;
+  _hanziWriterPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/hanzi-writer@3.7/dist/hanzi-writer.min.js";
+    script.onload = () => resolve(window.HanziWriter);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+  return _hanziWriterPromise;
+}
+
+// ─── Pinyin-Pro loader (lazy-loads from CDN for tone marks) ────
+let _pinyinProPromise = null;
+function loadPinyinPro() {
+  if (typeof window === "undefined") return Promise.reject();
+  if (window.pinyinPro) return Promise.resolve(window.pinyinPro);
+  if (_pinyinProPromise) return _pinyinProPromise;
+  _pinyinProPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/pinyin-pro@3.19.6/dist/index.js";
+    script.onload = () => resolve(window.pinyinPro);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+  return _pinyinProPromise;
+}
+
+// Cache for toned pinyin to avoid recomputing
+const _tonedPinyinCache = {};
+function getTonedPinyin(char, fallback) {
+  if (_tonedPinyinCache[char]) return _tonedPinyinCache[char];
+  if (typeof window !== "undefined" && window.pinyinPro && window.pinyinPro.pinyin) {
+    try {
+      const result = window.pinyinPro.pinyin(char, { toneType: "symbol", type: "string" });
+      if (result) {
+        _tonedPinyinCache[char] = result;
+        return result;
+      }
+    } catch(e) {}
+  }
+  return fallback || "";
+}
+
 // ─── Compact Character Data: [char, pinyin, word1, word2, initial, final] ────
 // Grouped by [book][lesson]
 const DATA = {
@@ -234,7 +282,75 @@ function pySim(a,b){if(!a&&!b)return 1;if(!a||!b)return 0;const na=normPy(a),nb=
 const SIM={q:["j","k"],j:["q"],zh:["z"],ch:["c"],sh:["s"],l:["n"],n:["l"],b:["p"],p:["b"],d:["t"],t:["d"],g:["k"],k:["g"],x:["s"],z:["zh"],c:["ch"],r:["l"]};
 const AF=["a","o","e","i","u","ai","ei","ao","ou","an","en","ang","eng","ong","ia","ie","iao","iu","ian","in","iang","ing","ua","uo","ui","uan","un","ue"];
 function genDist(cor,cd){const inits=["b","p","m","f","d","t","n","l","g","k","h","j","q","x","r","z","c","s","y","w"];const o=new Set([cor]);const ci=cd?.i||"",cf=cd?.f||"";if(ci&&SIM[ci])for(const si of SIM[ci])o.add(si+cf);if(cf.length>=2)o.add(ci+cf.slice(0,-1));let t=0;while(o.size<3&&t<30){o.add(inits[Math.floor(Math.random()*inits.length)]+AF[Math.floor(Math.random()*AF.length)]);t++;}return[...o].slice(0,3).sort(()=>Math.random()-0.5);}
-function speak(t){if(!window.speechSynthesis)return;window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang="zh-CN";u.rate=0.55;window.speechSynthesis.speak(u);}
+// ─── Speech Synthesis (mobile-friendly) ─────────────────────────
+// Cache Chinese voices once available
+let _cachedZhVoices = null;
+let _speechInitialized = false;
+
+function getChineseVoice() {
+  if (!window.speechSynthesis) return null;
+  if (_cachedZhVoices && _cachedZhVoices.length > 0) return _cachedZhVoices[0];
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices || voices.length === 0) return null;
+  // Prefer zh-CN, then zh-HK, zh-TW, then any zh
+  const prefs = ["zh-CN", "zh_CN", "zh-Hans", "zh-HK", "zh-TW", "zh"];
+  for (const pref of prefs) {
+    const v = voices.find(voice => voice.lang && voice.lang.toLowerCase().startsWith(pref.toLowerCase()));
+    if (v) {
+      _cachedZhVoices = [v];
+      return v;
+    }
+  }
+  // Fallback: any voice with "chinese" in name
+  const anyChinese = voices.find(v => v.name && v.name.toLowerCase().includes("chinese"));
+  if (anyChinese) {
+    _cachedZhVoices = [anyChinese];
+    return anyChinese;
+  }
+  return null;
+}
+
+// Pre-load voices (Chrome/Android fires voiceschanged event when ready)
+if (typeof window !== "undefined" && window.speechSynthesis) {
+  if (window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = () => {
+      _cachedZhVoices = null;
+      getChineseVoice();
+    };
+  }
+  try { window.speechSynthesis.getVoices(); } catch(e) {}
+}
+
+function speak(t) {
+  if (!window.speechSynthesis) return;
+  try {
+    // Cancel any pending/ongoing utterance
+    window.speechSynthesis.cancel();
+    // iOS hack: the first call after page load sometimes doesn't produce sound.
+    // Initialize on first call with a tiny silent utterance.
+    if (!_speechInitialized) {
+      try {
+        const warmup = new SpeechSynthesisUtterance("");
+        warmup.volume = 0;
+        window.speechSynthesis.speak(warmup);
+      } catch(e) {}
+      _speechInitialized = true;
+    }
+    const u = new SpeechSynthesisUtterance(t);
+    u.lang = "zh-CN";
+    u.rate = 0.55;
+    u.pitch = 1;
+    u.volume = 1;
+    const voice = getChineseVoice();
+    if (voice) u.voice = voice;
+    // iOS sometimes ignores first speak; queue with slight delay as a safety net
+    window.speechSynthesis.speak(u);
+    // Workaround for Chrome bug where speech cuts off after ~15 seconds
+    // (not critical for single chars but good practice)
+  } catch(e) {
+    console.warn("Speech error:", e);
+  }
+}
 function sS(n){return"⭐".repeat(n)+"☆".repeat(Math.max(0,3-n));}
 
 // ─── Safe localStorage (fails silently if unavailable) ─────────
@@ -341,19 +457,65 @@ export default function App(){
   });const dt={...prev.dt,r:{...prev.dt.r,d:Math.min(prev.dt.r.d+1,prev.dt.r.t)}};return chkA({...prev,chars,dt,ts:prev.ts+(res==="known"?2:res==="review"?1:0)});});},[chkA]);
   const rP=useCallback(()=>setState(p=>{const dt={...p.dt,p:{...p.dt.p,d:Math.min(p.dt.p.d+1,p.dt.p.t)}};return chkA({...p,dt,tp:(p.tp||0)+1});}),[chkA]);
   const rW=useCallback(()=>setState(p=>{const dt={...p.dt,w:{...p.dt.w,d:Math.min(p.dt.w.d+1,p.dt.w.t)}};return chkA({...p,dt,tw:(p.tw||0)+1});}),[chkA]);
+  // Mark a character as "not written correctly" - tracks writeWrongCount (wwc) for weak-writing review
+  const markWriteWrong=useCallback((idx)=>setState(p=>{
+    const chars=p.chars.map((c,i)=>i===idx?{...c,wwc:(c.wwc||0)+1}:c);
+    return {...p,chars};
+  }),[]);
+  // Reduce writeWrongCount when kid successfully writes after teaching (clears one wrong from the tally)
+  const reduceWriteWrong=useCallback((idx)=>setState(p=>{
+    const chars=p.chars.map((c,i)=>i===idx?{...c,wwc:Math.max(0,(c.wwc||0)-1)}:c);
+    return {...p,chars};
+  }),[]);
 
   const startDeck=(indices)=>{const deck=indices.map(i=>({...state.chars[i],di:i})).sort(()=>Math.random()-0.5);setCtx({deck,cur:0,res:{t:0,k:0,r:0,u:0,sc:0}});setPage("study");};
   const startBook=(b)=>{const idxs=CHARS.map((c,i)=>c.b===b?i:-1).filter(i=>i>=0);startDeck(idxs.slice(0,20));};
   const startLesson=(b,l)=>{const idxs=CHARS.map((c,i)=>(c.b===b&&c.l===l)?i:-1).filter(i=>i>=0);startDeck(idxs);};
   // Use user-configured session size (stored in state.dt), default to 25 for mixed / 20 for targeted
   const sessionSize = (state.sessionSize||25);
-  const startAll=()=>{const idxs=CHARS.map((_,i)=>i).sort(()=>Math.random()-0.5);startDeck(idxs.slice(0,sessionSize));};
+
+  // Reinforcement strategy: characters with wwc >= 2 are "weak" and appear more often.
+  // Build a weighted pool: each character with wwc >= 2 gets duplicated based on severity.
+  const getWeightedPool = () => {
+    const pool = [];
+    state.chars.forEach((c, i) => {
+      pool.push(i);
+      const wwc = c.wwc || 0;
+      // Add extra entries for weak writes: wwc=2 → +1 chance, wwc=3 → +2 chances, etc.
+      if (wwc >= 2) {
+        for (let k = 0; k < Math.min(wwc - 1, 3); k++) pool.push(i);
+      }
+    });
+    return pool;
+  };
+
+  const startAll=()=>{
+    const weightedPool = getWeightedPool();
+    const shuffled = [...weightedPool].sort(()=>Math.random()-0.5);
+    // Dedupe while keeping first occurrences (which are weighted toward weak chars)
+    const seen = new Set();
+    const idxs = [];
+    for (const i of shuffled) {
+      if (!seen.has(i)) { seen.add(i); idxs.push(i); }
+      if (idxs.length >= sessionSize) break;
+    }
+    startDeck(idxs);
+  };
   // Review: characters already studied but not mastered (review state only)
   const startReview=()=>{const idxs=state.chars.map((c,i)=>c.st==="review"?i:-1).filter(i=>i>=0).sort((a,b)=>state.chars[a].fam-state.chars[b].fam).slice(0,sessionSize);if(idxs.length)startDeck(idxs);};
   // New: characters never studied (unknown state only)
   const startNew=()=>{const idxs=state.chars.map((c,i)=>c.st==="unknown"?i:-1).filter(i=>i>=0).slice(0,sessionSize);if(idxs.length)startDeck(idxs);};
+  // Writing-weak: characters that were marked wrong during writing practice
+  const startWriteWeak=()=>{
+    const idxs=state.chars.map((c,i)=>(c.wwc||0)>0?i:-1).filter(i=>i>=0).sort((a,b)=>(state.chars[b].wwc||0)-(state.chars[a].wwc||0)).slice(0,sessionSize);
+    if(!idxs.length){alert("还没有不会写的字～");return;}
+    // Go straight to write mode for each char
+    const deck=idxs.map(i=>({...state.chars[i],di:i})).sort(()=>Math.random()-0.5);
+    setCtx({deck,cur:0,res:{t:0,k:0,r:0,u:0,sc:0},_w:deck[0]});
+    setPage("write");
+  };
 
-  const P={state,setState,page,setPage,ctx,setCtx,cnt,cntFor,upd,rP,rW,startBook,startLesson,startAll,startReview,startNew,toast,ACHS,overrides,setOverrides};
+  const P={state,setState,page,setPage,ctx,setCtx,cnt,cntFor,upd,rP,rW,markWriteWrong,reduceWriteWrong,startBook,startLesson,startAll,startReview,startNew,startWriteWeak,toast,ACHS,overrides,setOverrides};
 
   return(<div style={S.wrap}><div style={S.app}>
     {toast&&<div style={S.toast}><span style={{fontSize:26}}>{toast.e}</span><div><div style={{fontWeight:700,fontSize:13}}>成就解锁！</div><div style={{fontSize:12,opacity:0.8}}>{toast.n}</div></div></div>}
@@ -374,10 +536,11 @@ export default function App(){
 
 // ─── Home ───────────────────────────────────────────────────────
 function HomePage({P}){
-  const{state,cnt,startAll,startReview,startNew,setPage,setState}=P;
+  const{state,cnt,startAll,startReview,startNew,startWriteWeak,setPage,setState}=P;
   const dt=state.dt;const ad=dt.r.d>=dt.r.t&&dt.p.d>=dt.p.t&&dt.w.d>=dt.w.t;
   const reviewCount = cnt("review");
   const unknownCount = cnt("unknown");
+  const weakWriteCount = state.chars.filter(c=>(c.wwc||0)>0).length;
   const[tapCount,setTapCount]=useState(0);
   const tapTimerRef=useRef(null);
 
@@ -410,6 +573,7 @@ function HomePage({P}){
       {ad&&<div style={{textAlign:"center",marginTop:4,fontSize:12,color:"#4ade80",fontWeight:600}}>🎉 任务完成！</div>}</div>
     <button style={{...S.btn,background:"linear-gradient(135deg,#60a5fa,#818cf8)"}} onClick={()=>setPage("books")}>📚 选择课本</button>
     <button style={{...S.btn,background:"linear-gradient(135deg,#a78bfa,#c084fc)"}} onClick={startAll}>🎲 全部混合（随机{state.sessionSize||25}字）</button>
+    {weakWriteCount>0&&<button style={{...S.btn,background:"linear-gradient(135deg,#fb923c,#f97316)"}} onClick={startWriteWeak}>✍️ 不会写的字 ({weakWriteCount})</button>}
     <div style={S.bnav}><NB e="📊" l="报告" o={()=>setPage("report")}/><NB e="🏅" l="成就" o={()=>setPage("ach")}/><NB e="⚙️" l="设置" o={()=>setPage("set")}/></div>
   </div>);
 }
@@ -528,8 +692,11 @@ function LessonsPage({P}) {
 function StudyPage({P}){
   const{ctx,setCtx,upd,state,setState,setPage}=P;
   const[fb,setFb]=useState(null);
+  const[pinyinReady,setPinyinReady]=useState(!!(typeof window!=="undefined"&&window.pinyinPro));
+  useEffect(()=>{if(!pinyinReady){loadPinyinPro().then(()=>setPinyinReady(true)).catch(()=>{});}},[pinyinReady]);
   if(!ctx||!ctx.deck||ctx.cur>=ctx.deck.length){setPage("results");return null;}
   const cs=ctx.deck[ctx.cur];const cd=CHARS[cs.di];
+  const tonedPy = pinyinReady ? getTonedPinyin(cd.c, cd.p) : cd.p;
   const ans=(res)=>{upd(cs.di,res);const r={...ctx.res};r.t++;if(res==="known"){r.k++;r.sc+=2;}else if(res==="review"){r.r++;r.sc+=1;}else r.u++;
     setFb(res==="known"?{t:"太棒了！👏",c:"#4ade80"}:res==="review"?{t:"再练练～",c:"#fbbf24"}:{t:"没关系！💪",c:"#f87171"});
     setTimeout(()=>{setFb(null);setCtx({...ctx,res:r,cur:ctx.cur+1});},450);};
@@ -537,7 +704,7 @@ function StudyPage({P}){
     <div style={{textAlign:"center",fontSize:12,color:"#94a3b8"}}>{ctx.cur+1}/{ctx.deck.length}</div>
     <div style={{textAlign:"center"}}><div style={S.bc}>{cd.c}</div>
       <button onClick={()=>speak(cd.c)} style={S.sp}>🔊 听读音</button>
-      {state.pm&&<div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>拼音：{cd.p} · {DATA[cd.b].name}第{cd.l}课</div>}
+      {state.pm&&<div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>拼音：{tonedPy} · {DATA[cd.b].name}第{cd.l}课</div>}
       {cd.w.length>0&&<div style={{fontSize:13,color:"#60a5fa",marginTop:2}}>组词：{cd.w.join("、")}</div>}</div>
     {fb&&<div style={{textAlign:"center",fontSize:16,fontWeight:700,color:fb.c,margin:"2px 0"}}>{fb.t}</div>}
     <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:4}}>
@@ -567,20 +734,248 @@ function VerifyPage({P}){const cs=P.ctx?._v;const cd=cs?CHARS[cs.di]:null;const[
     {done&&<div style={{textAlign:"center",marginTop:8,fontSize:15,fontWeight:700,color:sel===cd.p?"#4ade80":"#f87171"}}>{sel===cd.p?"答对啦！🎉":"正确："+cd.p}</div>}</div>);
 }
 
-// ─── Write ──────────────────────────────────────────────────────
-function WritePage({P}){const cs=P.ctx?._w;const cd=cs?CHARS[cs.di]:null;const ref=useRef(null);const[dr,setDr]=useState(false);const[st,setSt]=useState([]);const[fb,setFb]=useState("");
+// ─── Stroke Animation Component (uses Hanzi Writer CDN) ────────
+function StrokeAnimation({char}) {
+  const containerRef = useRef(null);
+  const writerRef = useRef(null);
+  const [status, setStatus] = useState("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatus("loading");
+    loadHanziWriter().then(HanziWriter => {
+      if (cancelled || !containerRef.current) return;
+      containerRef.current.innerHTML = "";
+      try {
+        writerRef.current = HanziWriter.create(containerRef.current, char, {
+          width: 160,
+          height: 160,
+          padding: 8,
+          strokeAnimationSpeed: 1,
+          delayBetweenStrokes: 250,
+          strokeColor: "#1e293b",
+          radicalColor: "#f97316",
+          showOutline: true,
+          outlineColor: "#e2e8f0",
+        });
+        setStatus("ready");
+        setTimeout(() => {
+          if (writerRef.current && !cancelled) writerRef.current.animateCharacter();
+        }, 300);
+      } catch(e) {
+        setStatus("error");
+      }
+    }).catch(() => {
+      if (!cancelled) setStatus("error");
+    });
+    return () => {
+      cancelled = true;
+      if (writerRef.current) {
+        try { writerRef.current.hideCharacter(); } catch(e) {}
+      }
+    };
+  }, [char]);
+
+  const replay = () => {
+    if (writerRef.current) {
+      try { writerRef.current.animateCharacter(); } catch(e) {}
+    }
+  };
+
+  return (
+    <div style={{textAlign:"center"}}>
+      <div ref={containerRef} style={{display:"inline-block",minHeight:160,minWidth:160}} />
+      {status==="loading" && <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>加载笔顺动画...</div>}
+      {status==="error" && <div style={{fontSize:11,color:"#f87171",marginTop:4}}>笔顺动画加载失败（需要联网）</div>}
+      {status==="ready" && <button onClick={replay} style={{...S.btn,background:"#e0e7ff",color:"#4338ca",fontSize:11,padding:"4px 10px",marginTop:4,display:"inline-block"}}>▶️ 重放笔顺</button>}
+    </div>
+  );
+}
+
+function WritePage({P}){
+  const cs=P.ctx?._w;
+  const cd=cs?CHARS[cs.di]:null;
+  const ref=useRef(null);
+  const[dr,setDr]=useState(false);
+  const[st,setSt]=useState([]);
+  const[fb,setFb]=useState("");
+  const[phase,setPhase]=useState("write");
+  const[pinyinReady,setPinyinReady]=useState(!!(typeof window!=="undefined"&&window.pinyinPro));
+
+  useEffect(()=>{
+    if(!pinyinReady){
+      loadPinyinPro().then(()=>setPinyinReady(true)).catch(()=>setPinyinReady(false));
+    }
+  },[pinyinReady]);
+
   if(!cd){P.setPage("study");return null;}
+
+  const wordWithChar = cd.w.find(w => w && w.includes(cd.c)) || cd.w[0] || cd.c;
+  const tonedPy = pinyinReady ? getTonedPinyin(cd.c, cd.p) : cd.p;
+  const maskedWord = wordWithChar.replace(new RegExp(cd.c, "g"), "("+tonedPy+")");
+
   const gp=e=>{const r=ref.current.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return{x:t.clientX-r.left,y:t.clientY-r.top};};
-  useEffect(()=>{const c=ref.current;if(!c)return;const x=c.getContext("2d");x.clearRect(0,0,220,220);x.font="160px serif";x.fillStyle="rgba(0,0,0,0.06)";x.textAlign="center";x.textBaseline="middle";x.fillText(cd.c,110,115);x.strokeStyle="rgba(0,0,0,0.06)";x.setLineDash([4,4]);x.beginPath();x.moveTo(110,0);x.lineTo(110,220);x.moveTo(0,110);x.lineTo(220,110);x.stroke();x.setLineDash([]);x.strokeStyle="#1e293b";x.lineWidth=3.5;x.lineCap="round";x.lineJoin="round";for(const s of st){if(s.length<2)continue;x.beginPath();x.moveTo(s[0].x,s[0].y);for(let i=1;i<s.length;i++)x.lineTo(s[i].x,s[i].y);x.stroke();}},[st,cd]);
-  const fin=()=>{const all=st.flat();if(all.length<10){setFb("写得太少了～");return;}setFb("写得不错！👏");P.rW();};
-  return(<div style={S.pg}><Bk o={()=>P.setPage("study")}/><div style={S.pt}>写「{cd.c}」</div>
-    <button onClick={()=>speak(cd.c)} style={{...S.sp,margin:"0 auto 4px",display:"flex"}}>🔊</button>
-    <div style={{display:"flex",justifyContent:"center"}}><canvas ref={ref} width={220} height={220}
-      onMouseDown={e=>{e.preventDefault();setDr(true);setSt(p=>[...p,[gp(e)]]);}} onMouseMove={e=>{if(!dr)return;e.preventDefault();setSt(p=>{const n=[...p];n[n.length-1]=[...n[n.length-1],gp(e)];return n;});}} onMouseUp={()=>setDr(false)} onMouseLeave={()=>setDr(false)}
-      onTouchStart={e=>{e.preventDefault();setDr(true);setSt(p=>[...p,[gp(e)]]);}} onTouchMove={e=>{if(!dr)return;e.preventDefault();setSt(p=>{const n=[...p];n[n.length-1]=[...n[n.length-1],gp(e)];return n;});}} onTouchEnd={()=>setDr(false)}
-      style={{border:"2px solid #e2e8f0",borderRadius:10,background:"#fff",touchAction:"none",cursor:"crosshair"}}/></div>
-    {fb&&<div style={{textAlign:"center",marginTop:4,fontSize:13,fontWeight:600,color:fb.includes("不错")?"#4ade80":"#fb923c"}}>{fb}</div>}
-    <div style={{display:"flex",gap:6,marginTop:4}}><button style={{...S.btn,flex:1,background:"#fee2e2",color:"#b91c1c"}} onClick={()=>{setSt([]);setFb("");}}>清除</button><button style={{...S.btn,flex:1,background:"#dcfce7",color:"#15803d"}} onClick={fin}>完成</button></div></div>);
+
+  useEffect(()=>{
+    const c=ref.current;
+    if(!c)return;
+    const x=c.getContext("2d");
+    x.clearRect(0,0,220,220);
+    if(phase==="trace"){
+      x.font="160px serif";
+      x.fillStyle="rgba(251,146,60,0.25)";
+      x.textAlign="center";
+      x.textBaseline="middle";
+      x.fillText(cd.c,110,115);
+    } else if(phase==="retry"){
+      x.font="160px serif";
+      x.fillStyle="rgba(0,0,0,0.05)";
+      x.textAlign="center";
+      x.textBaseline="middle";
+      x.fillText(cd.c,110,115);
+    }
+    x.strokeStyle="rgba(0,0,0,0.08)";
+    x.setLineDash([4,4]);
+    x.beginPath();
+    x.moveTo(110,0);x.lineTo(110,220);
+    x.moveTo(0,110);x.lineTo(220,110);
+    x.stroke();
+    x.setLineDash([]);
+    x.strokeStyle="#1e293b";
+    x.lineWidth=3.5;
+    x.lineCap="round";
+    x.lineJoin="round";
+    for(const s of st){
+      if(s.length<2)continue;
+      x.beginPath();
+      x.moveTo(s[0].x,s[0].y);
+      for(let i=1;i<s.length;i++)x.lineTo(s[i].x,s[i].y);
+      x.stroke();
+    }
+  },[st,cd,phase]);
+
+  const clearCanvas=()=>{setSt([]);setFb("");};
+
+  const goNext=()=>{
+    if(P.ctx && P.ctx.deck && P.ctx.deck.length>1){
+      const nextIdx = P.ctx.cur + 1;
+      if(nextIdx < P.ctx.deck.length){
+        const nextCard = P.ctx.deck[nextIdx];
+        P.setCtx({...P.ctx, cur: nextIdx, _w: nextCard});
+        setPhase("write");
+        clearCanvas();
+        return;
+      }
+    }
+    P.setPage("study");
+  };
+
+  const markDone=()=>{
+    const all=st.flat();
+    if(all.length<10){setFb("写得太少了～");return;}
+    setFb("写得真棒！👏");
+    P.rW();
+    setTimeout(goNext,1200);
+  };
+
+  const markWrong=()=>{
+    P.markWriteWrong(cs.di);
+    setPhase("trace");
+    clearCanvas();
+    setFb("");
+  };
+
+  const finishedTrace=()=>{
+    setPhase("retry");
+    clearCanvas();
+    setFb("");
+  };
+
+  const retryDone=()=>{
+    const all=st.flat();
+    if(all.length<10){setFb("写得太少了～");return;}
+    setFb("进步啦！👏");
+    P.rW();
+    P.reduceWriteWrong(cs.di);
+    setTimeout(goNext,1200);
+  };
+
+  return(
+    <div style={S.pg}>
+      <Bk o={()=>P.setPage("study")}/>
+      <div style={S.pt}>写字练习</div>
+
+      {phase==="write" && (
+        <div style={{...S.card,textAlign:"center",padding:"14px 10px"}}>
+          <div style={{fontSize:12,color:"#64748b",marginBottom:4}}>写出这个词里的汉字</div>
+          <div style={{fontSize:26,fontWeight:700,letterSpacing:3,color:"#1e293b"}}>{maskedWord}</div>
+          <button onClick={()=>speak(wordWithChar)} style={{...S.sp,margin:"6px auto 0",display:"flex"}}>🔊 听读</button>
+        </div>
+      )}
+
+      {phase==="trace" && (
+        <div style={{...S.card,textAlign:"center",padding:"12px 10px",background:"linear-gradient(135deg,rgba(251,146,60,0.1),rgba(254,243,199,0.4))",border:"2px solid #fb923c"}}>
+          <div style={{fontSize:12,color:"#c2410c",fontWeight:600,marginBottom:4}}>这个字这样写 ✍️</div>
+          <StrokeAnimation char={cd.c} />
+          <div style={{fontSize:12,color:"#64748b",marginTop:6}}>拼音：{tonedPy} · 组词：{cd.w.join("、")}</div>
+          <div style={{fontSize:11,color:"#fb923c",marginTop:4}}>看完笔顺，在下面沿着橙色字描一遍</div>
+          <button onClick={()=>speak(cd.c)} style={{...S.sp,margin:"4px auto 0",display:"flex"}}>🔊 听读</button>
+        </div>
+      )}
+
+      {phase==="retry" && (
+        <div style={{...S.card,textAlign:"center",padding:"10px 10px",background:"linear-gradient(135deg,rgba(96,165,250,0.1),rgba(224,231,255,0.5))",border:"2px solid #60a5fa"}}>
+          <div style={{fontSize:12,color:"#1e40af",fontWeight:600,marginBottom:2}}>现在自己再写一次 💪</div>
+          <div style={{fontSize:12,color:"#64748b"}}>拼音：{tonedPy}</div>
+        </div>
+      )}
+
+      <div style={{display:"flex",justifyContent:"center"}}>
+        <canvas ref={ref} width={220} height={220}
+          onMouseDown={e=>{e.preventDefault();setDr(true);setSt(p=>[...p,[gp(e)]]);}}
+          onMouseMove={e=>{if(!dr)return;e.preventDefault();setSt(p=>{const n=[...p];n[n.length-1]=[...n[n.length-1],gp(e)];return n;});}}
+          onMouseUp={()=>setDr(false)}
+          onMouseLeave={()=>setDr(false)}
+          onTouchStart={e=>{e.preventDefault();setDr(true);setSt(p=>[...p,[gp(e)]]);}}
+          onTouchMove={e=>{if(!dr)return;e.preventDefault();setSt(p=>{const n=[...p];n[n.length-1]=[...n[n.length-1],gp(e)];return n;});}}
+          onTouchEnd={()=>setDr(false)}
+          style={{border:"2px solid #e2e8f0",borderRadius:10,background:"#fff",touchAction:"none",cursor:"crosshair"}}/>
+      </div>
+
+      {fb&&<div style={{textAlign:"center",marginTop:4,fontSize:14,fontWeight:600,color:fb.includes("棒")||fb.includes("进步")?"#4ade80":"#fb923c"}}>{fb}</div>}
+
+      {phase==="write" && (
+        <div>
+          <div style={{display:"flex",gap:6,marginTop:4}}>
+            <button style={{...S.btn,flex:1,background:"#fee2e2",color:"#b91c1c",fontSize:12}} onClick={clearCanvas}>🧹 清除</button>
+            <button style={{...S.btn,flex:2,background:"linear-gradient(135deg,#4ade80,#22c55e)",fontSize:13}} onClick={markDone}>✅ 我写完了</button>
+          </div>
+          <button style={{...S.btn,background:"#fef3c7",color:"#92400e",fontSize:12,marginTop:4,width:"100%"}} onClick={markWrong}>🤔 不会写，看正确写法</button>
+        </div>
+      )}
+
+      {phase==="trace" && (
+        <div style={{display:"flex",gap:6,marginTop:4}}>
+          <button style={{...S.btn,flex:1,background:"#fee2e2",color:"#b91c1c",fontSize:12}} onClick={clearCanvas}>🧹 清除</button>
+          <button style={{...S.btn,flex:2,background:"linear-gradient(135deg,#60a5fa,#3b82f6)",fontSize:13}} onClick={finishedTrace}>描完了，再写一次 →</button>
+        </div>
+      )}
+
+      {phase==="retry" && (
+        <div>
+          <div style={{display:"flex",gap:6,marginTop:4}}>
+            <button style={{...S.btn,flex:1,background:"#fee2e2",color:"#b91c1c",fontSize:12}} onClick={clearCanvas}>🧹 清除</button>
+            <button style={{...S.btn,flex:2,background:"linear-gradient(135deg,#4ade80,#22c55e)",fontSize:13}} onClick={retryDone}>✅ 写完了</button>
+          </div>
+          <button style={{...S.btn,background:"#f1f5f9",color:"#64748b",fontSize:11,marginTop:4,width:"100%"}} onClick={()=>{setPhase("trace");clearCanvas();}}>← 回去再描一遍</button>
+        </div>
+      )}
+
+      {P.state.chars[cs.di] && P.state.chars[cs.di].wwc > 0 && phase==="write" ?
+        <div style={{fontSize:10,color:"#f97316",textAlign:"center",marginTop:2}}>这个字之前写错过 {P.state.chars[cs.di].wwc} 次</div>
+        : null}
+    </div>
+  );
 }
 
 // ─── Pinyin ─────────────────────────────────────────────────────
@@ -599,7 +994,7 @@ function PinyinPage({P}){const cs=P.ctx?._p;const cd=cs?CHARS[cs.di]:null;const[
     {fb&&<div style={{textAlign:"center",fontSize:15,fontWeight:700,color:fb.c,marginTop:4}}>{fb.t}</div>}
     {dn&&<div style={{textAlign:"center",fontSize:11,color:"#94a3b8"}}>正确：{cd.p}</div>}
     <div style={{display:"flex",gap:6,marginTop:8}}>{!dn?<button style={{...S.btn,flex:1,background:"linear-gradient(135deg,#60a5fa,#818cf8)"}} onClick={sub}>提交</button>
-      :<><button style={{...S.btn,flex:1,background:"#e2e8f0",color:"#475569"}} onClick={()=>{sI("");sF("");sFb(null);sD(false);}}>再试</button><button style={{...S.btn,flex:1,background:"linear-gradient(135deg,#60a5fa,#818cf8)"}} onClick={()=>P.setPage("study")}>继续</button></>}</div></div>);
+      :<div style={{display:"flex",gap:6,flex:1}}><button style={{...S.btn,flex:1,background:"#e2e8f0",color:"#475569"}} onClick={()=>{sI("");sF("");sFb(null);sD(false);}}>再试</button><button style={{...S.btn,flex:1,background:"linear-gradient(135deg,#60a5fa,#818cf8)"}} onClick={()=>P.setPage("study")}>继续</button></div>}</div></div>);
 }
 
 // ─── Results ────────────────────────────────────────────────────
@@ -624,10 +1019,15 @@ function WrongCharRow({c}) {
   return <div style={{display:"flex",justifyContent:"space-between",padding:"3px 0",borderBottom:"1px solid #f1f5f9"}}><span style={{fontSize:16}}>{CHARS[c.idx].c}</span><span style={{fontSize:11,color:"#94a3b8"}}>{CHARS[c.idx].p}</span><span style={{color:"#f87171",fontSize:11}}>{"错" + c.wc + "次"}</span></div>;
 }
 
+function WeakWriteRow({c}) {
+  return <div style={{display:"flex",justifyContent:"space-between",padding:"3px 0",borderBottom:"1px solid #f1f5f9"}}><span style={{fontSize:16}}>{CHARS[c.idx].c}</span><span style={{fontSize:11,color:"#94a3b8"}}>{CHARS[c.idx].p}</span><span style={{color:"#fb923c",fontSize:11}}>{"不会写 " + c.wwc + " 次"}</span></div>;
+}
+
 function ReportPage({P}) {
   var cnt = P.cnt;
   var state = P.state;
   var wr = state.chars.filter(function(c){ return c.wc > 0; }).sort(function(a,b){ return b.wc - a.wc; }).slice(0, 10);
+  var ww = state.chars.filter(function(c){ return (c.wwc||0) > 0; }).sort(function(a,b){ return (b.wwc||0) - (a.wwc||0); }).slice(0, 10);
   return (
     <div style={S.pg}>
       <Bk o={() => P.setPage("home")} />
@@ -644,6 +1044,7 @@ function ReportPage({P}) {
         <div style={S.ct}>各册进度</div>
         {BOOKS.map(b => <BookStatRow key={b} b={b} state={state} />)}
       </div>
+      {ww.length > 0 && <div style={S.card}><div style={S.ct}>✍️ 不会写的字</div>{ww.map((c, i) => <WeakWriteRow key={i} c={c} />)}<div style={{fontSize:10,color:"#94a3b8",marginTop:4}}>首页 "不会写的字" 按钮可专门练习</div></div>}
       {wr.length > 0 && <div style={S.card}><div style={S.ct}>常错字</div>{wr.map((c, i) => <WrongCharRow key={i} c={c} />)}</div>}
     </div>
   );
