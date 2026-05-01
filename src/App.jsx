@@ -443,16 +443,19 @@ export default function App(){
     if(res==="known")n.fam+=2;
     else if(res==="review")n.fam+=1;
     else{n.fam-=1;n.wc++;}
-    // Clamp fam to reasonable range
     if(n.fam>10)n.fam=10;
     if(n.fam<-2)n.fam=-2;
     // Status logic:
-    // - Answering "认识" immediately moves to 已认识 (known).
-    // - Answering "有点印象" moves to 待复习 (review).
-    // - Once known, stays known (no demotion from occasional mistakes).
+    // - Once a character is "known" (已认识), it stays known permanently (no demotion).
+    // - Answering "认识" → immediately becomes "known" (已认识).
+    // - Answering "不确定" or "不认识" → "review" (待复习).
+    //   Reasoning: any character the kid has been quizzed on and didn't fully know
+    //   needs to come up again for practice. Keeping it in "unknown" would mean it
+    //   never resurfaces in review sessions.
+    // - "unknown" (未学过) means never been answered - the initial state only.
     if(c.st==="known") n.st="known";
     else if(res==="known") n.st="known";
-    else n.st=n.fam>=1?"review":"unknown";
+    else n.st="review";
     return n;
   });const dt={...prev.dt,r:{...prev.dt.r,d:Math.min(prev.dt.r.d+1,prev.dt.r.t)}};return chkA({...prev,chars,dt,ts:prev.ts+(res==="known"?2:res==="review"?1:0)});});},[chkA]);
   const rP=useCallback(()=>setState(p=>{const dt={...p.dt,p:{...p.dt.p,d:Math.min(p.dt.p.d+1,p.dt.p.t)}};return chkA({...p,dt,tp:(p.tp||0)+1});}),[chkA]);
